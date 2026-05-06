@@ -1,0 +1,71 @@
+from flask import Blueprint, render_template, request, jsonify, session, current_app
+from openai import OpenAI
+from app.extensions import db
+from app.models import ChatLog
+
+dashboard_bp = Blueprint("dashboard", __name__)
+
+@dashboard_bp.route("/")
+def home():
+    return render_template("home.html")
+
+@dashboard_bp.route("/chatbot", methods=["POST"])
+def chatbot():
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+
+    if not message:
+        return jsonify({"reply": "Bạn chưa nhập nội dung."}), 400
+
+    try:
+        api_key = current_app.config.get("GROQ_API_KEY")
+        model = current_app.config.get("GROQ_MODEL", "llama-3.1-8b-instant")
+
+        if not api_key:
+            return jsonify({"reply": "Chưa cấu hình GROQ_API_KEY."}), 500
+
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
+
+        history = session.get("chat_history", [])
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Bạn là trợ lý AI cho website chăm sóc sức khỏe. "
+                    "Trả lời bằng tiếng Việt, lịch sự, dễ hiểu, ngắn gọn. "
+                    "Chỉ hỗ trợ về đặt lịch, dịch vụ, hướng dẫn dùng website, thông tin chung. "
+                    "Không chẩn đoán thay bác sĩ."
+                )
+            }
+        ]
+
+        messages.extend(history[-8:])
+        messages.append({"role": "user", "content": message})
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.3
+        )
+
+        reply = response.choices[0].message.content.strip()
+
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": reply})
+        session["chat_history"] = history[-12:]
+
+        try:
+            chat = ChatLog(user_id=None, message=message, response=reply)
+            db.session.add(chat)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        return jsonify({"reply": reply})
+
+    except Exception as e:
+        return jsonify({"reply": f"AI đang lỗi: {str(e)}"}), 500
