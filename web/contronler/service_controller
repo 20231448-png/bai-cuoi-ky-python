@@ -1,0 +1,39 @@
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_login import login_required, current_user
+from app.extensions import db
+from app.models import Service
+
+service_bp = Blueprint("service", __name__)
+
+@service_bp.route("/")
+def index():
+    services = Service.query.filter_by(status=True).order_by(Service.service_id.asc()).all()
+    return render_template("services/index.html", services=services)
+
+@service_bp.route("/<int:service_id>")
+def detail(service_id):
+    service = Service.query.filter_by(service_id=service_id, status=True).first_or_404()
+    return render_template("services/detail.html", service=service)
+
+@service_bp.route("/create", methods=["GET", "POST"])
+@login_required
+def create():
+    if current_user.role not in ["admin", "staff"]:
+        flash("Bạn không có quyền truy cập chức năng này.", "danger")
+        return redirect(url_for("dashboard.home"))
+
+    if request.method == "POST":
+        service = Service(
+            service_name=request.form.get("service_name"),
+            short_description=request.form.get("short_description"),
+            price=request.form.get("price"),
+            description=request.form.get("description"),
+            image_url=request.form.get("image_url"),
+            status=True if request.form.get("status") == "1" else False
+        )
+        db.session.add(service)
+        db.session.commit()
+        flash("Thêm dịch vụ thành công.", "success")
+        return redirect(url_for("service.index"))
+
+    return render_template("services/create.html")
