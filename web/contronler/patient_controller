@@ -1,0 +1,81 @@
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_login import login_required, current_user
+from app.extensions import db
+from app.models import Patient
+
+patient_bp = Blueprint("patient", __name__)
+
+@patient_bp.route("/")
+@login_required
+def index():
+    if current_user.role not in ["admin", "staff", "doctor"]:
+        flash("Bạn không có quyền truy cập.", "danger")
+        return redirect(url_for("dashboard.home"))
+
+    keyword = request.args.get("keyword", "").strip()
+
+    query = Patient.query
+    if keyword:
+        query = query.filter(Patient.full_name.ilike(f"%{keyword}%"))
+
+    patients = query.order_by(Patient.patient_id.desc()).all()
+    return render_template("patients/index.html", patients=patients, keyword=keyword)
+
+@patient_bp.route("/create", methods=["GET", "POST"])
+@login_required
+def create():
+    if current_user.role not in ["admin", "staff"]:
+        flash("Bạn không có quyền thêm bệnh nhân.", "danger")
+        return redirect(url_for("patient.index"))
+
+    if request.method == "POST":
+        patient = Patient(
+            full_name=request.form.get("full_name"),
+            gender=request.form.get("gender") or None,
+            date_of_birth=request.form.get("date_of_birth") or None,
+            phone=request.form.get("phone"),
+            email=request.form.get("email"),
+            address=request.form.get("address")
+        )
+        db.session.add(patient)
+        db.session.commit()
+        flash("Thêm bệnh nhân thành công.", "success")
+        return redirect(url_for("patient.index"))
+
+    return render_template("patients/create.html")
+
+@patient_bp.route("/edit/<int:patient_id>", methods=["GET", "POST"])
+@login_required
+def edit(patient_id):
+    if current_user.role not in ["admin", "staff"]:
+        flash("Bạn không có quyền sửa bệnh nhân.", "danger")
+        return redirect(url_for("patient.index"))
+
+    patient = Patient.query.get_or_404(patient_id)
+
+    if request.method == "POST":
+        patient.full_name = request.form.get("full_name")
+        patient.gender = request.form.get("gender") or None
+        patient.date_of_birth = request.form.get("date_of_birth") or None
+        patient.phone = request.form.get("phone")
+        patient.email = request.form.get("email")
+        patient.address = request.form.get("address")
+
+        db.session.commit()
+        flash("Cập nhật bệnh nhân thành công.", "success")
+        return redirect(url_for("patient.index"))
+
+    return render_template("patients/edit.html", patient=patient)
+
+@patient_bp.route("/delete/<int:patient_id>", methods=["POST"])
+@login_required
+def delete(patient_id):
+    if current_user.role not in ["admin", "staff"]:
+        flash("Bạn không có quyền xóa bệnh nhân.", "danger")
+        return redirect(url_for("patient.index"))
+
+    patient = Patient.query.get_or_404(patient_id)
+    db.session.delete(patient)
+    db.session.commit()
+    flash("Xóa bệnh nhân thành công.", "success")
+    return redirect(url_for("patient.index"))
