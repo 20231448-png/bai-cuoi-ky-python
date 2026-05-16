@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Hóa đơn{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="mb-4">Danh sách hóa đơn</h2>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Mã</th>
+                        <th>Bệnh nhân</th>
+                        <th>Tổng tiền</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in invoices %}
+                    <tr>
+                        <td>{{ i.invoice_id }}</td>
+                        <td>{{ i.patient.full_name }}</td>
+                        <td>{{ "{:,.0f}".format(i.total_amount) }} VNĐ</td>
+                        <td>{{ i.status }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center">Chưa có dữ liệu</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
